@@ -9,6 +9,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 from pydub import AudioSegment
@@ -91,6 +92,9 @@ class DeltaCodecApp(QMainWindow):
         self.process_button = QPushButton('Обработать')
         self.process_button.clicked.connect(self.process_signal)
         layout.addWidget(self.process_button)
+        self.load_button = QPushButton('Загрузить звук')
+        self.load_button.clicked.connect(self.load_sound)
+        layout.addWidget(self.load_button)
         self.error_slider = LabeledSlider(Qt.Horizontal, 0, 100, 0, 'Уровень ошибок')
         layout.addWidget(self.error_slider)
         self.error_label = QLabel('Уровень ошибок: 0%')
@@ -199,9 +203,38 @@ class DeltaCodecApp(QMainWindow):
         signal_with_errors = np.copy(signal)
         signal_with_errors[error_indices] = np.random.uniform(-1, 1, num_errors)
         return signal_with_errors
+    
+    def load_sound(self):
+        file_dialog = QFileDialog()
+        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav *.ogg)')
+
+        if file_path:
+            try:
+                audio = AudioSegment.from_file(file_path)
+                print("Аудиофайл успешно загружен.")
+                # Теперь у вас есть переменная 'audio', содержащая аудиоданные
+            except Exception as e:
+                print(f"Ошибка при загрузке аудио: {e}")
 
     def process_signal(self):
-        self.original_signal = self.record_audio()[:48000 * 2]
+        file_dialog = QFileDialog()
+        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav *.ogg)')
+
+        if file_path:
+            try:
+                audio = AudioSegment.from_file(file_path)
+                frames = []
+
+                for _ in range(int(44100 * 2 / 1024)):
+                    data = audio.read(1024)
+                    frames.append(data)
+
+                convert_audio = np.frombuffer(b''.join(frames), dtype=np.int16)
+                print("Аудиофайл успешно загружен.")
+                # Теперь у вас есть переменная 'audio', содержащая аудиоданные
+            except Exception as e:
+                print(f"Ошибка при загрузке аудио: {e}")
+        self.original_signal = audio[:48000 * 2]
         self.update_error_level()
         self.encoded_signal = self.delta_encode(self.original_signal)
         self.original_signal = self.add_errors(self.original_signal) 
