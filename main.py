@@ -1,18 +1,19 @@
 import sys
 import numpy as np
+import threading
+import librosa
 import pyaudio
+import wave
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QHBoxLayout,
-    QLabel, QComboBox, QSlider, QAction, QMenu, QMessageBox, QTabWidget
+    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget
 )
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
-from pydub import AudioSegment
 
 class LabeledSlider(QWidget):
     def __init__(self, orientation, min_val, max_val, default_val, title):
@@ -49,6 +50,12 @@ class LabeledSlider(QWidget):
 class DeltaCodecApp(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.audio = pyaudio.PyAudio()
+        self.stream = None
+        self.frames = []
+
+        self.file_path = ""
 
         self.initUI()
         self.create_menu()
@@ -92,9 +99,24 @@ class DeltaCodecApp(QMainWindow):
         self.process_button = QPushButton('Обработать')
         self.process_button.clicked.connect(self.process_signal)
         layout.addWidget(self.process_button)
-        self.load_button = QPushButton('Загрузить звук')
-        self.load_button.clicked.connect(self.load_sound)
-        layout.addWidget(self.load_button)
+        self.play_sound = QPushButton('Проиграть')
+        self.play_sound.clicked.connect(self.plays_sound)
+        layout.addWidget(self.play_sound)
+
+
+
+        horizontal_layout_widget = QWidget(self)
+        horizontal_layout_widget.setGeometry(60, 110, 251, 81)
+        horizontal_layout = QHBoxLayout(horizontal_layout_widget)
+        horizontal_layout.setContentsMargins(0, 0, 0, 0)
+        self.pushButton_1 = QPushButton('Начать запись')
+        self.pushButton_1.clicked.connect(self.start_recording)
+        horizontal_layout.addWidget(self.pushButton_1)
+        self.pushButton_2 = QPushButton('Остановить запись')
+        self.pushButton_2.clicked.connect(self.stop_recording)
+        horizontal_layout.addWidget(self.pushButton_2)
+        layout.addWidget(horizontal_layout_widget)
+        
         self.error_slider = LabeledSlider(Qt.Horizontal, 0, 100, 0, 'Уровень ошибок')
         layout.addWidget(self.error_slider)
         self.error_label = QLabel('Уровень ошибок: 0%')
@@ -203,37 +225,15 @@ class DeltaCodecApp(QMainWindow):
         signal_with_errors = np.copy(signal)
         signal_with_errors[error_indices] = np.random.uniform(-1, 1, num_errors)
         return signal_with_errors
-    
-    def load_sound(self):
-        file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav *.ogg)')
-
-        if file_path:
-            try:
-                audio = AudioSegment.from_file(file_path)
-                print("Аудиофайл успешно загружен.")
-                # Теперь у вас есть переменная 'audio', содержащая аудиоданные
-            except Exception as e:
-                print(f"Ошибка при загрузке аудио: {e}")
 
     def process_signal(self):
         file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav *.ogg)')
+        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
 
         if file_path:
-            try:
-                audio = AudioSegment.from_file(file_path)
-                frames = []
 
-                for _ in range(int(44100 * 2 / 1024)):
-                    data = audio.read(1024)
-                    frames.append(data)
+            audio, _ = librosa.load(file_path, sr=None)
 
-                convert_audio = np.frombuffer(b''.join(frames), dtype=np.int16)
-                print("Аудиофайл успешно загружен.")
-                # Теперь у вас есть переменная 'audio', содержащая аудиоданные
-            except Exception as e:
-                print(f"Ошибка при загрузке аудио: {e}")
         self.original_signal = audio[:48000 * 2]
         self.update_error_level()
         self.encoded_signal = self.delta_encode(self.original_signal)
@@ -277,20 +277,50 @@ class DeltaCodecApp(QMainWindow):
             signal.append(value)
         return signal
 
+    def start_recording(self):
+
+        file_dialog = QFileDialog()
+        self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.mp3)')
+
+        if self.file_path:
+
+            self.stream = self.audio.open(format=pyaudio.paInt16,
+                                          channels=1,
+                                          rate=44100,
+                                          input=True,
+                                          frames_per_buffer=1024)
+
+            print("Запись начата...")
+
+            threading.Thread(target=self.record_audio).start()
+
     def record_audio(self):
-        audio = pyaudio.PyAudio()
-        stream = audio.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, frames_per_buffer=1024)
-        frames = []
+        while self.stream.is_active():
+            data = self.stream.read(1024)
+            self.frames.append(data)
 
-        for _ in range(int(44100 * 2 / 1024)):
-            data = stream.read(1024)
-            frames.append(data)
+    def stop_recording(self):
+        if self.stream:
+            self.stream.stop_stream()
+            self.stream.close()
 
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
+            wf = wave.open(self.file_path, 'wb')
+            wf.setnchannels(1)
+            wf.setsampwidth(self.audio.get_sample_size(pyaudio.paInt16))
+            wf.setframerate(44100)
+            wf.writeframes(b''.join(self.frames))
+            wf.close()
 
-        return np.frombuffer(b''.join(frames), dtype=np.int16)
+            print(f"Аудиофайл сохранен по пути: {self.file_path}")
+
+
+    def closeEvent(self, event):
+        if self.stream and self.stream.is_active():
+            self.stop_recording()
+        event.accept()
+        
+    def plays_sound(self):
+        pass
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

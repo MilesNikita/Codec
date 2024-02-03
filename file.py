@@ -35,7 +35,7 @@ class AudioRecorderApp(QMainWindow):
     def start_recording(self):
 
         file_dialog = QFileDialog()
-        self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.wav)')
+        self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.mp3)')
 
         if self.file_path:
 
