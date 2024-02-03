@@ -14,30 +14,27 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
+from pydub import AudioSegment
+from pydub.playback import play
+import struct
+import os
 
 class LabeledSlider(QWidget):
     def __init__(self, orientation, min_val, max_val, default_val, title):
         super().__init__()
-
         layout = QVBoxLayout()
-
         self.slider = QSlider(orientation)
         self.slider.setMinimum(min_val)
         self.slider.setMaximum(max_val)
         self.slider.setValue(default_val)
-
         self.label_min = QLabel(str(min_val))
         self.label_max = QLabel(str(max_val))
-
         self.slider.valueChanged.connect(self.update_labels)
-
         slider_layout = QHBoxLayout()
         slider_layout.addWidget(self.label_min)
         slider_layout.addWidget(self.slider)
         slider_layout.addWidget(self.label_max)
-
         layout.addLayout(slider_layout)
-
         self.setLayout(layout)
 
     def update_labels(self):
@@ -50,13 +47,11 @@ class LabeledSlider(QWidget):
 class DeltaCodecApp(QMainWindow):
     def __init__(self):
         super().__init__()
-
         self.audio = pyaudio.PyAudio()
         self.stream = None
         self.frames = []
-
+        self.decodeded_signal = []
         self.file_path = ""
-
         self.initUI()
         self.create_menu()
 
@@ -100,11 +95,8 @@ class DeltaCodecApp(QMainWindow):
         self.process_button.clicked.connect(self.process_signal)
         layout.addWidget(self.process_button)
         self.play_sound = QPushButton('Проиграть')
-        self.play_sound.clicked.connect(self.plays_sound)
+        self.play_sound.clicked.connect(self.play_sound_thread)
         layout.addWidget(self.play_sound)
-
-
-
         horizontal_layout_widget = QWidget(self)
         horizontal_layout_widget.setGeometry(60, 110, 251, 81)
         horizontal_layout = QHBoxLayout(horizontal_layout_widget)
@@ -116,7 +108,6 @@ class DeltaCodecApp(QMainWindow):
         self.pushButton_2.clicked.connect(self.stop_recording)
         horizontal_layout.addWidget(self.pushButton_2)
         layout.addWidget(horizontal_layout_widget)
-        
         self.error_slider = LabeledSlider(Qt.Horizontal, 0, 100, 0, 'Уровень ошибок')
         layout.addWidget(self.error_slider)
         self.error_label = QLabel('Уровень ошибок: 0%')
@@ -229,22 +220,20 @@ class DeltaCodecApp(QMainWindow):
     def process_signal(self):
         file_dialog = QFileDialog()
         file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
-
         if file_path:
-
-            audio, _ = librosa.load(file_path, sr=None)
-
-        self.original_signal = audio[:48000 * 2]
-        self.update_error_level()
-        self.encoded_signal = self.delta_encode(self.original_signal)
-        self.original_signal = self.add_errors(self.original_signal) 
-        decoded_signal = self.delta_decode(self.encoded_signal)
-        error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
-        mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
-        self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'r', 'Оригинальный сигнал')
-        self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'b', 'Закодированный сигнал')
-        self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'g', 'Декодированный сигнал')
-        self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
+            audio, sample_rate = librosa.load(file_path, sr=None)
+            self.original_signal = audio[:48000 * 2]  # Пример ограничения длительности до 2 секунд
+            self.update_error_level()
+            self.encoded_signal = self.delta_encode(self.original_signal)
+            self.original_signal = self.add_errors(self.original_signal) 
+            decoded_signal = self.delta_decode(self.encoded_signal)
+            self.decodeded_signal = decoded_signal
+            error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
+            mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
+            self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'r', 'Оригинальный сигнал')
+            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'b', 'Закодированный сигнал')
+            self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'g', 'Декодированный сигнал')
+            self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
 
     def calculate_error_bits_per_second(self, original_signal, decoded_signal):
         error_bits = np.sum(original_signal != decoded_signal)
@@ -264,11 +253,11 @@ class DeltaCodecApp(QMainWindow):
         return delta_signal
 
     def delta_decode(self, delta_signal):
-        signal = [delta_signal[0]]  
+        decode_signal = [delta_signal[0]]  
         for i in range(1, len(delta_signal)):
-            value = signal[i - 1] + delta_signal[i]
-            signal.append(value)
-        return signal
+            value = decode_signal[i - 1] + delta_signal[i]
+            decode_signal.append(value)
+        return decode_signal
 
     def delta_decode_binary(self, delta_signal):
         signal = [delta_signal[0]]
@@ -278,20 +267,15 @@ class DeltaCodecApp(QMainWindow):
         return signal
 
     def start_recording(self):
-
         file_dialog = QFileDialog()
         self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.mp3)')
-
         if self.file_path:
-
             self.stream = self.audio.open(format=pyaudio.paInt16,
                                           channels=1,
                                           rate=44100,
                                           input=True,
                                           frames_per_buffer=1024)
-
             print("Запись начата...")
-
             threading.Thread(target=self.record_audio).start()
 
     def record_audio(self):
@@ -303,14 +287,12 @@ class DeltaCodecApp(QMainWindow):
         if self.stream:
             self.stream.stop_stream()
             self.stream.close()
-
             wf = wave.open(self.file_path, 'wb')
             wf.setnchannels(1)
             wf.setsampwidth(self.audio.get_sample_size(pyaudio.paInt16))
             wf.setframerate(44100)
             wf.writeframes(b''.join(self.frames))
             wf.close()
-
             print(f"Аудиофайл сохранен по пути: {self.file_path}")
 
 
@@ -320,7 +302,27 @@ class DeltaCodecApp(QMainWindow):
         event.accept()
         
     def plays_sound(self):
-        pass
+        try:
+            if self.decodeded_signal:
+                audio_bytes = b''.join(struct.pack('<h', int(sample * 32767)) for sample in self.decodeded_signal)
+                sample_width = 2  # фиксированный sample_width
+                frame_rate = 44100  # фиксированный frame_rate
+                channels = 1  # фиксированное количество каналов
+                with wave.open('temp_audio.wav', 'wb') as wf:
+                    wf.setnchannels(channels)
+                    wf.setsampwidth(sample_width)
+                    wf.setframerate(frame_rate)
+                    wf.writeframes(audio_bytes)
+                decoded_audio = AudioSegment.from_wav('temp_audio.wav')
+                play(decoded_audio)
+                os.remove('temp_audio.wav')
+            else:
+                QMessageBox.warning(self, 'Ошибка', 'Декодированный сигнал не найден')
+        except Exception as e:
+            print(str(e))
+
+    def play_sound_thread(self):
+        threading.Thread(target=self.plays_sound).start()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
