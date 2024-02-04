@@ -14,9 +14,14 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QFont
 from pydub import AudioSegment
+from PyQt5 import QtWidgets, QtGui
 from pydub.playback import play
 import struct
 import os
+
+ico = os.path.join(sys._MEIPASS, "icon.ico") if getattr(sys, 'frozen', False) else "icon.ico"
+app1 = QtWidgets.QApplication(sys.argv)
+app1.setWindowIcon(QtGui.QIcon(ico))
 
 class LabeledSlider(QWidget):
     def __init__(self, orientation, min_val, max_val, default_val, title):
