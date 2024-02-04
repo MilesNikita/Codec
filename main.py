@@ -6,14 +6,13 @@ import pyaudio
 import wave
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QHBoxLayout,
-    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget
+    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget, QFileDialog
 )
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT
-from PyQt5.QtWidgets import QFileDialog
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QFont
 from pydub import AudioSegment
 from pydub.playback import play
 import struct
@@ -47,6 +46,7 @@ class LabeledSlider(QWidget):
 class DeltaCodecApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.my_thread = threading.Thread(target=self.record_audio)
         self.audio = pyaudio.PyAudio()
         self.stream = None
         self.frames = []
@@ -56,7 +56,7 @@ class DeltaCodecApp(QMainWindow):
         self.create_menu()
 
     def initUI(self):
-        self.setWindowTitle('Дельта-кодек речевого сигнала для аудиосигнала с микрофона')
+        self.setWindowTitle('Дельта-кодек речевого сигнала для аудиофайла с микрофона')
         self.setGeometry(100, 100, 800, 600)
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
@@ -70,10 +70,27 @@ class DeltaCodecApp(QMainWindow):
     def setup_main_tab(self):
         layout = QVBoxLayout()
         theory_label = QLabel('Теория дельта кодирования:')
+        font = QFont()
+        font.setPointSize(14)
+        theory_label.setFont(font)
         layout.addWidget(theory_label)
-        theory_text = QLabel('Дельта-кодирование - это метод сжатия данных, который заключается в хранении разницы между последовательными сигналами, а не самих сигналов.\n\n'
-                             'Этот метод основан на предположении, что соседние значения сигнала имеют небольшие изменения. При дельта-кодировании сохраняется разница между каждым соседним значением.\n\n'
-                             'Это особенно полезно для аудио-сигналов, где изменения часто невелики и последовательные сэмплы часто похожи.')
+        theory_text = QLabel('Дельта-кодирование — это метод сжатия данных, который заключается в хранении разницы между последовательными сигналами, а не самих сигналов.\n\n'
+                    ' Основные принципы дельта-кодирования:\n'
+                    '1. Идея: Вместо кодирования самих значений сигнала, кодируются изменения (разница) между последовательными значениями.\n'
+                    '2. Дельта-модуляция: Основной метод дельта-кодирования называется дельта-модуляцией (Delta Modulation, DM).\n'
+                    '3. Предсказание и коррекция: В дельта-кодировании используется предсказание текущего значения на основе предыдущих значений.\n'
+                    '4. Адаптивная дельта-модуляция: Используется адаптивный подход, где дельта изменяется в зависимости от изменения сигнала.\n\n'
+                    ' Применение дельта-кодирования:\n'
+                    '1. Аудиосжатие: В аудиокодеках, таких как ADPCM (Adaptive Differential Pulse Code Modulation), используется дельта-кодирование.\n'
+                    '2. Передача данных: В телекоммуникациях для передачи данных с минимальной пропускной способностью.\n'
+                    '3. Обработка сигналов: В обработке сигналов, дельта-кодирование используется для анализа изменений в сигналах.\n\n'
+                    'Преимущества и недостатки:\n'
+                    '- Преимущества: Эффективность при кодировании медленно меняющихся сигналов, простота реализации.\n'
+                    '- Недостатки: Чувствительность к быстрым изменениям сигнала, потеря точности при больших диапазонах изменений сигнала.\n\n'
+                    'Дельта-кодирование представляет собой компромисс между эффективностью сжатия и сохранением качества данных, и его выбор зависит от характеристик конкретного сигнала и требований приложения.')
+        font = QFont()
+        font.setPointSize(10)
+        theory_text.setFont(font)
         layout.addWidget(theory_text)
         image_layout = QHBoxLayout()
         pixmap1 = QPixmap("image1.png")
@@ -142,10 +159,37 @@ class DeltaCodecApp(QMainWindow):
         info_menu.addAction(harakter_action)
 
     def show_about_dialog(self):
-        QMessageBox.about(self, 'О программе', 'Дельта-кодек речевого сигнала для демонстрации принципа работы для аудио записанного с микрофона.')
+        QMessageBox.about(self, 'О программе', "<b>Дельта-кодер речевого сигнала</b><br><br>"
+    "<b>Основные функции программы:</b><br>"
+    "1. <u>Запись аудиосигнала с микрофона:</u> Программа записывает звук с микрофона компьютера.<br>"
+    "2. <u>Обработка и дельта-кодирование речевого сигнала:</u> Записанный аудиосигнал подвергается дельта-кодированию.<br>"
+    "3. <u>Сохранение закодированного аудиосигнала:</u> Закодированный сигнал сохраняется в файл.<br>"
+    "4. <u>Декодирование аудиосигнала:</u> Программа предоставляет функциональность для декодирования речевого сигнала.<br>"
+    "5. <u>Графический интерфейс пользователя (GUI):</u> Для удобства использования программа включает графический интерфейс.<br>"
+    "6. <u>Настройки параметров кодирования:</u> Пользователь может настраивать параметры дельта-кодирования.<br><br>"
+    "<b>Технологии и библиотеки:</b><br>"
+    "- PyQt5 или Tkinter для GUI.<br>"
+    "- PyAudio для записи аудиосигнала.<br>"
+    "- NumPy для обработки аудиоданных и реализации дельта-кодирования.<br>"
+    "- Wave или другие аудио-библиотеки для сохранения и воспроизведения аудиосигнала.<br>"
+    "<br>"
+    "<i>Программа также может предоставлять возможности анализа звука, визуализации аудиосигнала и другие дополнительные функции в зависимости от требований пользователя.</i>")
     
     def show_harakter_dialog(self):
-        QMessageBox.about(self, 'Системные требования', 'Для функцияонирования программы необходимо иметь....')
+        QMessageBox.about(self, 'Системные требования',  "<b>Системные требования</b><br><br>"
+    "<b>Минимальные требования:</b><br>"
+    "- <u>Операционная система:</u> Windows 7<br>"
+    "- <u>Процессор:</u> Intel Core i3 или аналогичный<br>"
+    "- <u>Оперативная память:</u> 4 ГБ<br>"
+    "- <u>Свободное место на жестком диске:</u> 10 ГБ<br>"
+    "- <u>Звуковая карта:</u> Совместимая с DirectX 9.0c<br><br>"
+    "<b>Рекомендуемые требования:</b><br>"
+    "- <u>Операционная система:</u> Windows 10<br>"
+    "- <u>Процессор:</u> Intel Core i5 или аналогичный<br>"
+    "- <u>Оперативная память:</u> 8 ГБ<br>"
+    "- <u>Свободное место на жестком диске:</u> 20 ГБ<br>"
+    "- <u>Звуковая карта:</u> Совместимая с DirectX 9.0c<br><br>"
+    "<i>Примечание: Требования могут изменяться в зависимости от версии программы и использованных библиотек.</i>")
 
     def set_zoom_factor(self, zoom_factor):
         for nav_toolbar, canvas in [
@@ -211,7 +255,7 @@ class DeltaCodecApp(QMainWindow):
 
     def add_errors(self, signal):
         num_samples = len(signal)
-        num_errors = int(num_samples * self.error_level / 100)
+        num_errors = int(num_samples * self.error_level / 800)
         error_indices = np.random.choice(num_samples, num_errors, replace=False)
         signal_with_errors = np.copy(signal)
         signal_with_errors[error_indices] = np.random.uniform(-1, 1, num_errors)
@@ -222,10 +266,11 @@ class DeltaCodecApp(QMainWindow):
         file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
         if file_path:
             audio, sample_rate = librosa.load(file_path, sr=None)
-            self.original_signal = audio[:48000 * 2]  # Пример ограничения длительности до 2 секунд
+            #self.original_signal = audio[:48000 * 2]  # Пример ограничения длительности до 2 секунд
+            self.original_signal = audio
             self.update_error_level()
-            self.encoded_signal = self.delta_encode(self.original_signal)
             self.original_signal = self.add_errors(self.original_signal) 
+            self.encoded_signal = self.delta_encode(self.original_signal)
             decoded_signal = self.delta_decode(self.encoded_signal)
             self.decodeded_signal = decoded_signal
             error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
@@ -276,7 +321,7 @@ class DeltaCodecApp(QMainWindow):
                                           input=True,
                                           frames_per_buffer=1024)
             print("Запись начата...")
-            threading.Thread(target=self.record_audio).start()
+            self.my_thread.start()
 
     def record_audio(self):
         while self.stream.is_active():
@@ -293,36 +338,32 @@ class DeltaCodecApp(QMainWindow):
             wf.setframerate(44100)
             wf.writeframes(b''.join(self.frames))
             wf.close()
+            self.my_thread.join()
             print(f"Аудиофайл сохранен по пути: {self.file_path}")
-
-
-    def closeEvent(self, event):
-        if self.stream and self.stream.is_active():
-            self.stop_recording()
-        event.accept()
         
     def plays_sound(self):
+        audio_bytes = b''.join(struct.pack('<h', int(sample * 32767)) for sample in self.decodeded_signal)
+        sample_width = 2  # фиксированный sample_width
+        frame_rate = 44100  # фиксированный frame_rate
+        channels = 1  # фиксированное количество каналов
+        with wave.open('temp_audio.wav', 'wb') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(sample_width)
+            wf.setframerate(frame_rate)
+            wf.writeframes(audio_bytes)
+        decoded_audio = AudioSegment.from_wav('temp_audio.wav')
+        play(decoded_audio)
+        os.remove('temp_audio.wav')
+           
+
+    def play_sound_thread(self):
         try:
             if self.decodeded_signal:
-                audio_bytes = b''.join(struct.pack('<h', int(sample * 32767)) for sample in self.decodeded_signal)
-                sample_width = 2  # фиксированный sample_width
-                frame_rate = 44100  # фиксированный frame_rate
-                channels = 1  # фиксированное количество каналов
-                with wave.open('temp_audio.wav', 'wb') as wf:
-                    wf.setnchannels(channels)
-                    wf.setsampwidth(sample_width)
-                    wf.setframerate(frame_rate)
-                    wf.writeframes(audio_bytes)
-                decoded_audio = AudioSegment.from_wav('temp_audio.wav')
-                play(decoded_audio)
-                os.remove('temp_audio.wav')
+                threading.Thread(target=self.plays_sound).start()
             else:
                 QMessageBox.warning(self, 'Ошибка', 'Декодированный сигнал не найден')
         except Exception as e:
             print(str(e))
-
-    def play_sound_thread(self):
-        threading.Thread(target=self.plays_sound).start()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
