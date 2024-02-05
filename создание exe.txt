@@ -1,0 +1,1 @@
+pyinstaller --noconfirm --onefile --windowed --icon "C:/Users/vladk/OneDrive/Codec/icon.ico" --add-data "C:/Users/vladk/OneDrive/Codec/icon.ico;."  "" --additional-hooks-dir "C:/Users/vladk/OneDrive/extra-hooks" -F "C:/Users/vladk/OneDrive/Codec/main.py"

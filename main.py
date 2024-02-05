@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 import threading
-import librosa
+import librosa as lr
 import pyaudio
 import wave
 from PyQt5.QtWidgets import (
@@ -270,7 +270,7 @@ class DeltaCodecApp(QMainWindow):
         file_dialog = QFileDialog()
         file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
         if file_path:
-            audio, sample_rate = librosa.load(file_path, sr=None)
+            audio, sample_rate = lr.load(file_path, sr=None)
             #self.original_signal = audio[:48000 * 2]  # Пример ограничения длительности до 2 секунд
             self.original_signal = audio
             self.update_error_level()
