@@ -6,7 +6,7 @@ import pyaudio
 import wave
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QHBoxLayout,
-    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget, QFileDialog
+    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget, QFileDialog, QComboBox
 )
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -22,6 +22,21 @@ import os
 ico = os.path.join(sys._MEIPASS, "icon.ico") if getattr(sys, 'frozen', False) else "icon.ico"
 app1 = QtWidgets.QApplication(sys.argv)
 app1.setWindowIcon(QtGui.QIcon(ico))
+
+stylesheet = """
+    QWidget {
+        background-color: black;
+        color: white;
+    }
+
+    QPushButton:disabled {
+        color: gray;
+    }
+
+    FigureCanvas {
+        background-color: white;
+    }
+"""
 
 class LabeledSlider(QWidget):
     def __init__(self, orientation, min_val, max_val, default_val, title):
@@ -51,6 +66,7 @@ class LabeledSlider(QWidget):
 class DeltaCodecApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.setStyleSheet(stylesheet)
         self.my_thread = threading.Thread(target=self.record_audio)
         self.audio = pyaudio.PyAudio()
         self.stream = None
@@ -62,7 +78,7 @@ class DeltaCodecApp(QMainWindow):
 
     def initUI(self):
         self.setWindowTitle('Дельта-кодек речевого сигнала для аудиофайла с микрофона')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1300, 850)
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
         self.main_tab = QWidget()
@@ -111,12 +127,27 @@ class DeltaCodecApp(QMainWindow):
 
     def setup_extra_tab(self):
         layout = QVBoxLayout()
-        self.original_label = QLabel('Оригинальный сигнал:')
+        self.generate_label = QLabel('Работа со случайным сигналом:')
+        layout.addWidget(self.generate_label)
+        self.combobox = QComboBox()
+        self.combobox.addItem('Гармонический')
+        self.combobox.addItem('Пилообразный')
+        self.combobox.addItem('Треугольный')
+        self.combobox.addItem('Случайный')
+        self.combobox.addItem('Использовать запись')
+        self.combobox.activated.connect(self.enable_button)
+        self.generite = QPushButton('Генерация сигнала')
+        self.generite.clicked.connect(self.generate_signal)
+        layout.addWidget(self.combobox)
+        layout.addWidget(self.generite)
+        self.original_label = QLabel('Работа с записью звука:')
         layout.addWidget(self.original_label)
         self.process_button = QPushButton('Обработать')
+        self.process_button.setEnabled(False)
         self.process_button.clicked.connect(self.process_signal)
         layout.addWidget(self.process_button)
         self.play_sound = QPushButton('Проиграть')
+        self.play_sound.setEnabled(False)
         self.play_sound.clicked.connect(self.play_sound_thread)
         layout.addWidget(self.play_sound)
         horizontal_layout_widget = QWidget(self)
@@ -124,9 +155,11 @@ class DeltaCodecApp(QMainWindow):
         horizontal_layout = QHBoxLayout(horizontal_layout_widget)
         horizontal_layout.setContentsMargins(0, 0, 0, 0)
         self.pushButton_1 = QPushButton('Начать запись')
+        self.pushButton_1.setEnabled(False)
         self.pushButton_1.clicked.connect(self.start_recording)
         horizontal_layout.addWidget(self.pushButton_1)
         self.pushButton_2 = QPushButton('Остановить запись')
+        self.pushButton_2.setEnabled(False)
         self.pushButton_2.clicked.connect(self.stop_recording)
         horizontal_layout.addWidget(self.pushButton_2)
         layout.addWidget(horizontal_layout_widget)
@@ -136,22 +169,27 @@ class DeltaCodecApp(QMainWindow):
         layout.addWidget(self.error_label)
         self.result_label = QLabel('')
         layout.addWidget(self.result_label)
+        niz_layoutw = QWidget()
+        niz_layoutw.setStyleSheet("background-color: white;")
+        niz_layout = QVBoxLayout(niz_layoutw)
+        niz_layout.setContentsMargins(0,0,0,0)
         self.original_figure = Figure(figsize=(8, 4))
         self.original_canvas = FigureCanvas(self.original_figure)
-        layout.addWidget(self.original_canvas)
+        niz_layout.addWidget(self.original_canvas)
         self.original_nav_toolbar = NavigationToolbar2QT(self.original_canvas, self)
-        layout.addWidget(self.original_nav_toolbar)
+        niz_layout.addWidget(self.original_nav_toolbar)
         self.encoded_figure = Figure(figsize=(5, 4))
         self.encoded_canvas = FigureCanvas(self.encoded_figure)
-        layout.addWidget(self.encoded_canvas)
+        niz_layout.addWidget(self.encoded_canvas)
         self.encoded_nav_toolbar = NavigationToolbar2QT(self.encoded_canvas, self)
-        layout.addWidget(self.encoded_nav_toolbar)
+        niz_layout.addWidget(self.encoded_nav_toolbar)
         self.decoded_figure = Figure(figsize=(8, 4))
         self.decoded_canvas = FigureCanvas(self.decoded_figure)
-        layout.addWidget(self.decoded_canvas)
+        niz_layout.addWidget(self.decoded_canvas)
         self.decoded_nav_toolbar = NavigationToolbar2QT(self.decoded_canvas, self)
-        layout.addWidget(self.decoded_nav_toolbar)
+        niz_layout.addWidget(self.decoded_nav_toolbar)
         self.extra_tab.setLayout(layout)
+        layout.addWidget(niz_layoutw)
 
     def create_menu(self):
         menubar = self.menuBar()
@@ -195,6 +233,62 @@ class DeltaCodecApp(QMainWindow):
     "- <u>Свободное место на жестком диске:</u> 20 ГБ<br>"
     "- <u>Звуковая карта:</u> Совместимая с DirectX 9.0c<br><br>"
     "<i>Примечание: Требования могут изменяться в зависимости от версии программы и использованных библиотек.</i>")
+
+    def enable_button(self):
+        if self.combobox.currentText() == 'Использовать запись':
+            self.pushButton_1.setEnabled(True)
+            self.pushButton_2.setEnabled(True)
+            self.process_button.setEnabled(True)
+            self.play_sound.setEnabled(True)
+            self.generite.setEnabled(False)
+        else:
+            self.pushButton_1.setEnabled(False)
+            self.pushButton_2.setEnabled(False)
+            self.process_button.setEnabled(False)
+            self.play_sound.setEnabled(False)
+            self.generite.setEnabled(True)
+
+    def generate_signal(self):
+        signal_type = self.combobox.currentText()
+        if signal_type == 'Гармонический':
+            signal = self.generate_harmonic_signal()
+            self.process_random_signal(signal)
+        elif signal_type == 'Пилообразный':
+            signal = self.generate_sawtooth_signal()
+            self.process_random_signal(signal)
+        elif signal_type == 'Треугольный':
+            signal = self.generate_triangle_signal()
+            self.process_random_signal(signal)
+        elif signal_type == 'Случайный':
+            signal = self.generate_random_signal()
+            self.process_random_signal(signal)
+
+    def generate_harmonic_signal(self):
+        time = np.linspace(0, 1, 44100) 
+        frequency = 440  
+        amplitude = 0.5  
+        harmonic_signal = amplitude * np.sin(2 * np.pi * frequency * time)
+        return harmonic_signal
+
+    def generate_sawtooth_signal(self):
+        time = np.linspace(0, 1, 44100)  
+        frequency = 440  
+        amplitude = 0.5  
+        period = 1 / frequency
+        sawtooth_signal = 2 * amplitude * (time % period) / period - amplitude
+        return sawtooth_signal
+
+    def generate_triangle_signal(self):
+        time = np.linspace(0, 1, 44100)  
+        frequency = 440  
+        amplitude = 0.5  
+        period = 1 / frequency 
+        triangle_signal = amplitude * (2 * np.abs(2 * (time % period) / period - 1) - 1)
+        return triangle_signal
+
+    def generate_random_signal(self):
+        random_signal = np.random.uniform(-1, 1, 44100)
+        return random_signal
 
     def set_zoom_factor(self, zoom_factor):
         for nav_toolbar, canvas in [
@@ -271,8 +365,8 @@ class DeltaCodecApp(QMainWindow):
         file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
         if file_path:
             audio, sample_rate = lr.load(file_path, sr=None)
-            #self.original_signal = audio[:48000 * 2]  # Пример ограничения длительности до 2 секунд
             self.original_signal = audio
+            self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'b', 'Оригинальный сигнал')
             self.update_error_level()
             self.original_signal = self.add_errors(self.original_signal) 
             self.encoded_signal = self.delta_encode(self.original_signal)
@@ -280,10 +374,23 @@ class DeltaCodecApp(QMainWindow):
             self.decodeded_signal = decoded_signal
             error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
             mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
-            self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'r', 'Оригинальный сигнал')
-            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'b', 'Закодированный сигнал')
-            self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'g', 'Декодированный сигнал')
+            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'y', 'Закодированный сигнал')
+            self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
             self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
+
+    def process_random_signal(self, signal):
+        self.original_signal = signal
+        self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'b', 'Оригинальный сигнал')
+        self.update_error_level()
+        self.original_signal = self.add_errors(self.original_signal) 
+        self.encoded_signal = self.delta_encode(self.original_signal)
+        decoded_signal = self.delta_decode(self.encoded_signal)
+        self.decodeded_signal = decoded_signal
+        error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
+        mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
+        self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'y', 'Закодированный сигнал')
+        self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
+        self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
 
     def calculate_error_bits_per_second(self, original_signal, decoded_signal):
         error_bits = np.sum(original_signal != decoded_signal)
@@ -325,7 +432,6 @@ class DeltaCodecApp(QMainWindow):
                                           rate=44100,
                                           input=True,
                                           frames_per_buffer=1024)
-            print("Запись начата...")
             self.my_thread.start()
 
     def record_audio(self):
@@ -348,9 +454,9 @@ class DeltaCodecApp(QMainWindow):
         
     def plays_sound(self):
         audio_bytes = b''.join(struct.pack('<h', int(sample * 32767)) for sample in self.decodeded_signal)
-        sample_width = 2  # фиксированный sample_width
-        frame_rate = 44100  # фиксированный frame_rate
-        channels = 1  # фиксированное количество каналов
+        sample_width = 2  
+        frame_rate = 44100  
+        channels = 1 
         with wave.open('temp_audio.wav', 'wb') as wf:
             wf.setnchannels(channels)
             wf.setsampwidth(sample_width)
@@ -360,7 +466,6 @@ class DeltaCodecApp(QMainWindow):
         play(decoded_audio)
         os.remove('temp_audio.wav')
            
-
     def play_sound_thread(self):
         try:
             if self.decodeded_signal:
