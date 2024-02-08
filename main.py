@@ -24,18 +24,53 @@ app1 = QtWidgets.QApplication(sys.argv)
 app1.setWindowIcon(QtGui.QIcon(ico))
 
 stylesheet = """
+    
+    QTabWidget::pane {
+                border: 2px solid orange; /* Рамка панели */
+            }
+
+    QTabBar::tab {
+                background-color: #DCDCDC; /* Цвет фона кнопки */
+                color: black; /* Цвет текста на кнопке */
+            }
+    QTabBar::tab:selected {
+                background-color: orange; /* Цвет фона выбранной кнопки */
+                color: black;
+            }
+
     QWidget {
-        background-color: black;
+        background-color: #49423d;
         color: white;
     }
 
     QPushButton:disabled {
-        color: gray;
-    }
-
-    FigureCanvas {
+        color: black;
         background-color: white;
     }
+    QPushButton:enabled {
+        color: black;
+        background-color: 	orange;
+    }
+
+     QMenuBar {
+                background-color: #49423d; /* Цвет фона меню */
+                color: white; /* Цвет текста в меню */
+            }
+            QMenuBar::item:selected {
+                background-color: lightgrey; /* Цвет фона выбранного пункта меню */
+                color: black; /* Цвет текста выбранного пункта меню */
+            }
+            QMenu {
+                background-color: orange; /* Цвет фона подменю */
+                color: black; /* Цвет текста в подменю */
+            }
+            QMenu::item:selected {
+                background-color: lightgrey; /* Цвет фона выбранного пункта подменю */
+                color: black; /* Цвет текста выбранного пункта подменю */
+            }
+            
+
+
 """
 
 class LabeledSlider(QWidget):
@@ -170,20 +205,23 @@ class DeltaCodecApp(QMainWindow):
         self.result_label = QLabel('')
         layout.addWidget(self.result_label)
         niz_layoutw = QWidget()
-        niz_layoutw.setStyleSheet("background-color: white;")
+        niz_layoutw.setStyleSheet("background-color: #49423d;")
         niz_layout = QVBoxLayout(niz_layoutw)
         niz_layout.setContentsMargins(0,0,0,0)
         self.original_figure = Figure(figsize=(8, 4))
+        self.original_figure.set_facecolor('#49423d')
         self.original_canvas = FigureCanvas(self.original_figure)
         niz_layout.addWidget(self.original_canvas)
         self.original_nav_toolbar = NavigationToolbar2QT(self.original_canvas, self)
         niz_layout.addWidget(self.original_nav_toolbar)
         self.encoded_figure = Figure(figsize=(5, 4))
+        self.encoded_figure.set_facecolor('#49423d')
         self.encoded_canvas = FigureCanvas(self.encoded_figure)
         niz_layout.addWidget(self.encoded_canvas)
         self.encoded_nav_toolbar = NavigationToolbar2QT(self.encoded_canvas, self)
         niz_layout.addWidget(self.encoded_nav_toolbar)
         self.decoded_figure = Figure(figsize=(8, 4))
+        self.decoded_figure.set_facecolor('#49423d')
         self.decoded_canvas = FigureCanvas(self.decoded_figure)
         niz_layout.addWidget(self.decoded_canvas)
         self.decoded_nav_toolbar = NavigationToolbar2QT(self.decoded_canvas, self)
