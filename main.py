@@ -102,9 +102,10 @@ class DeltaCodecApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setStyleSheet(stylesheet)
-        self.my_thread = threading.Thread(target=self.record_audio)
-        self.audio = pyaudio.PyAudio()
+        self.thread_started = False
+        self.play_thread = False
         self.stream = None
+        self.audio = pyaudio.PyAudio()
         self.frames = []
         self.decodeded_signal = []
         self.file_path = ""
@@ -182,7 +183,7 @@ class DeltaCodecApp(QMainWindow):
         self.process_button.clicked.connect(self.process_signal)
         layout.addWidget(self.process_button)
         self.play_sound = QPushButton('Проиграть')
-        self.play_sound.setEnabled(False)
+        self.play_sound.setEnabled(True)
         self.play_sound.clicked.connect(self.play_sound_thread)
         layout.addWidget(self.play_sound)
         horizontal_layout_widget = QWidget(self)
@@ -228,6 +229,7 @@ class DeltaCodecApp(QMainWindow):
         niz_layout.addWidget(self.decoded_nav_toolbar)
         self.extra_tab.setLayout(layout)
         layout.addWidget(niz_layoutw)
+        self.status_bar = self.statusBar()
 
     def create_menu(self):
         menubar = self.menuBar()
@@ -277,13 +279,11 @@ class DeltaCodecApp(QMainWindow):
             self.pushButton_1.setEnabled(True)
             self.pushButton_2.setEnabled(True)
             self.process_button.setEnabled(True)
-            self.play_sound.setEnabled(True)
             self.generite.setEnabled(False)
         else:
             self.pushButton_1.setEnabled(False)
             self.pushButton_2.setEnabled(False)
             self.process_button.setEnabled(False)
-            self.play_sound.setEnabled(False)
             self.generite.setEnabled(True)
 
     def generate_signal(self):
@@ -300,6 +300,7 @@ class DeltaCodecApp(QMainWindow):
         elif signal_type == 'Случайный':
             signal = self.generate_random_signal()
             self.process_random_signal(signal)
+        self.status_bar.showMessage("Генерация сигнала произведена")
 
     def generate_harmonic_signal(self):
         time = np.linspace(0, 1, 44100) 
@@ -356,33 +357,28 @@ class DeltaCodecApp(QMainWindow):
     def plot_signal(self, figure, canvas, signal, color, title):
         time = np.linspace(-1, 1, len(signal))
         figure.clear()
-        ax = figure.add_subplot(111)
+        ax = figure.add_subplot()
         ax.plot(time, signal, label=title, color=color)
-        ax.set_title(title)
-        ax.set_xlabel('Время (сек)')
-        ax.set_ylabel('Напряжение (В)')
-        ax.set_xlim(-1, 1)
+        ax.set_title(title, color = 'w')
+        ax.set_xlabel('Время (сек)', color = 'w')
+        ax.set_ylabel('Напряжение (В)', color = 'w')
+        ax.set_xlim(-1, 1,)
         ax.legend()
         ax.grid(True)
-        ax.set_aspect('auto')
-        ax.tick_params(axis='both', which='major', labelsize=8)
-        ax.tick_params(axis='both', which='minor', labelsize=6)
         figure.tight_layout()
         canvas.draw()
 
     def plot_signal_code(self, figure, canvas, signal, color, title):
-        ax = figure.gca()
-        ax.clear()
+        figure.clear()
+        ax = figure.add_subplot()
         binary_signal = [1 if signal[i] > signal[i - 1] else 0 for i in range(1, len(signal))]
         binary_signal = [0] + binary_signal
         ax.step(range(len(binary_signal)), binary_signal, color=color, label=title)
-        ax.set_title(title)
-        ax.set_xlabel('Время (сек)')
-        ax.set_ylabel('Напряжение (В)')
+        ax.set_title(title, color = 'w')
+        ax.set_xlabel('Время (сек)', color = 'w')
+        ax.set_ylabel('Напряжение (В)', color = 'w')
         ax.legend()
         ax.grid(True)
-        ax.tick_params(axis='both', which='major', labelsize=8)
-        ax.tick_params(axis='both', which='minor', labelsize=6)
         figure.tight_layout()
         canvas.draw()
 
@@ -412,9 +408,10 @@ class DeltaCodecApp(QMainWindow):
             self.decodeded_signal = decoded_signal
             error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
             mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
-            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'y', 'Закодированный сигнал')
+            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'orange', 'Закодированный сигнал')
             self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
             self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
+            self.status_bar.showMessage("Сигнал обработан")
 
     def process_random_signal(self, signal):
         self.original_signal = signal
@@ -426,7 +423,7 @@ class DeltaCodecApp(QMainWindow):
         self.decodeded_signal = decoded_signal
         error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
         mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
-        self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'y', 'Закодированный сигнал')
+        self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'orange', 'Закодированный сигнал')
         self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
         self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
 
@@ -463,16 +460,24 @@ class DeltaCodecApp(QMainWindow):
 
     def start_recording(self):
         file_dialog = QFileDialog()
-        self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.mp3)')
+        self.file_path, _ = file_dialog.getSaveFileName(self, 'Выберите место сохранения', '', 'Audio files (*.mp3 *.wav)')
+
         if self.file_path:
             self.stream = self.audio.open(format=pyaudio.paInt16,
                                           channels=1,
                                           rate=44100,
                                           input=True,
                                           frames_per_buffer=1024)
+
+
+            self.my_thread = threading.Thread(target=self.record_audio)
             self.my_thread.start()
 
+        self.status_bar.showMessage("Производится запись сигнала:")
+        
+
     def record_audio(self):
+        self.frames = []
         while self.stream.is_active():
             data = self.stream.read(1024)
             self.frames.append(data)
@@ -487,7 +492,7 @@ class DeltaCodecApp(QMainWindow):
             wf.setframerate(44100)
             wf.writeframes(b''.join(self.frames))
             wf.close()
-            self.my_thread.join()
+            self.status_bar.showMessage(f"Аудиофайл сохранен по пути: {self.file_path}")
             print(f"Аудиофайл сохранен по пути: {self.file_path}")
         
     def plays_sound(self):
@@ -500,14 +505,16 @@ class DeltaCodecApp(QMainWindow):
             wf.setsampwidth(sample_width)
             wf.setframerate(frame_rate)
             wf.writeframes(audio_bytes)
-        decoded_audio = AudioSegment.from_wav('temp_audio.wav')
+        decoded_audio = AudioSegment.from_wav('./temp_audio.wav')
         play(decoded_audio)
-        os.remove('temp_audio.wav')
+        os.remove('./temp_audio.wav')
+        self.status_bar.showMessage("Проигрывание аудиосигнала завершено")
            
     def play_sound_thread(self):
         try:
             if self.decodeded_signal:
-                threading.Thread(target=self.plays_sound).start()
+                self.plays_sound()
+                
             else:
                 QMessageBox.warning(self, 'Ошибка', 'Декодированный сигнал не найден')
         except Exception as e:
@@ -516,5 +523,5 @@ class DeltaCodecApp(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = DeltaCodecApp()
-    window.show()
+    window.showMaximized() 
     sys.exit(app.exec_())
