@@ -6,7 +6,7 @@ import pyaudio
 import wave
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QHBoxLayout,
-    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget, QFileDialog, QComboBox
+    QLabel, QSlider, QAction, QMenu, QMessageBox, QTabWidget, QFileDialog, QComboBox, QLineEdit
 )
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -18,6 +18,7 @@ from PyQt5 import QtWidgets, QtGui
 from pydub.playback import play
 import struct
 import os
+import matplotlib.pyplot as plt
 
 ico = os.path.join(sys._MEIPASS, "icon.ico") if getattr(sys, 'frozen', False) else "icon.ico"
 app1 = QtWidgets.QApplication(sys.argv)
@@ -119,10 +120,13 @@ class DeltaCodecApp(QMainWindow):
         self.setCentralWidget(self.tabs)
         self.main_tab = QWidget()
         self.extra_tab = QWidget()
+        self.show_g = QWidget()
         self.tabs.addTab(self.main_tab, 'Теория дельта кодирования')
-        self.tabs.addTab(self.extra_tab, 'Программа')
+        self.tabs.addTab(self.extra_tab, 'Ввод входных параметров')
+        self.tabs.addTab(self.show_g, 'Просмотр графиков')
         self.setup_main_tab()
         self.setup_extra_tab()
+        self.show_graf()
 
     def setup_main_tab(self):
         layout = QVBoxLayout()
@@ -172,9 +176,13 @@ class DeltaCodecApp(QMainWindow):
         self.combobox.addItem('Случайный')
         self.combobox.addItem('Использовать запись')
         self.combobox.activated.connect(self.enable_button)
+        layout.addWidget(self.combobox)
+        self.level_txt1 = QLabel('Введите уровень квантования для случайного сигнала')
+        layout.addWidget(self.level_txt1)
+        self.level_kvantovan1 = QLineEdit()
+        layout.addWidget(self.level_kvantovan1)
         self.generite = QPushButton('Генерация сигнала')
         self.generite.clicked.connect(self.generate_signal)
-        layout.addWidget(self.combobox)
         layout.addWidget(self.generite)
         self.original_label = QLabel('Работа с записью звука:')
         layout.addWidget(self.original_label)
@@ -198,6 +206,11 @@ class DeltaCodecApp(QMainWindow):
         self.pushButton_2.setEnabled(False)
         self.pushButton_2.clicked.connect(self.stop_recording)
         horizontal_layout.addWidget(self.pushButton_2)
+        self.level_txt2 = QLabel('Введите уровень квантования для записанного сигнала')
+        layout.addWidget(self.level_txt2)
+        self.level_kvantovan2 = QLineEdit()
+        self.level_kvantovan2.setEnabled(False)
+        layout.addWidget(self.level_kvantovan2)
         layout.addWidget(horizontal_layout_widget)
         self.error_slider = LabeledSlider(Qt.Horizontal, 0, 100, 0, 'Уровень ошибок')
         layout.addWidget(self.error_slider)
@@ -205,31 +218,43 @@ class DeltaCodecApp(QMainWindow):
         layout.addWidget(self.error_label)
         self.result_label = QLabel('')
         layout.addWidget(self.result_label)
-        niz_layoutw = QWidget()
-        niz_layoutw.setStyleSheet("background-color: #49423d;")
-        niz_layout = QVBoxLayout(niz_layoutw)
-        niz_layout.setContentsMargins(0,0,0,0)
-        self.original_figure = Figure(figsize=(8, 4))
+        self.extra_tab.setLayout(layout)
+
+    def show_graf(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.show_g.setLayout(layout)
+        self.original_figure = Figure()
         self.original_figure.set_facecolor('#49423d')
         self.original_canvas = FigureCanvas(self.original_figure)
-        niz_layout.addWidget(self.original_canvas)
         self.original_nav_toolbar = NavigationToolbar2QT(self.original_canvas, self)
-        niz_layout.addWidget(self.original_nav_toolbar)
-        self.encoded_figure = Figure(figsize=(5, 4))
+        layout.addWidget(self.original_canvas)
+        layout.addWidget(self.original_nav_toolbar)
+        self.encoded_figure = Figure()
         self.encoded_figure.set_facecolor('#49423d')
         self.encoded_canvas = FigureCanvas(self.encoded_figure)
-        niz_layout.addWidget(self.encoded_canvas)
         self.encoded_nav_toolbar = NavigationToolbar2QT(self.encoded_canvas, self)
-        niz_layout.addWidget(self.encoded_nav_toolbar)
-        self.decoded_figure = Figure(figsize=(8, 4))
+        layout.addWidget(self.encoded_canvas)
+        layout.addWidget(self.encoded_nav_toolbar)
+        self.discretnie_figure = Figure()
+        self.discretnie_figure.set_facecolor('#49423d')
+        self.discretnie_canvas = FigureCanvas(self.discretnie_figure)
+        self.discretnie_nav_toolbar = NavigationToolbar2QT(self.discretnie_canvas, self)
+        layout.addWidget(self.discretnie_canvas)
+        layout.addWidget(self.discretnie_nav_toolbar)
+        self.kvant_figure = Figure()
+        self.kvant_figure.set_facecolor('#49423d')
+        self.kvant_canvas = FigureCanvas(self.kvant_figure)
+        self.kvant_nav_toolbar = NavigationToolbar2QT(self.kvant_canvas, self)
+        layout.addWidget(self.kvant_canvas)
+        layout.addWidget(self.kvant_nav_toolbar)
+        self.decoded_figure = Figure()
         self.decoded_figure.set_facecolor('#49423d')
         self.decoded_canvas = FigureCanvas(self.decoded_figure)
-        niz_layout.addWidget(self.decoded_canvas)
         self.decoded_nav_toolbar = NavigationToolbar2QT(self.decoded_canvas, self)
-        niz_layout.addWidget(self.decoded_nav_toolbar)
-        self.extra_tab.setLayout(layout)
-        layout.addWidget(niz_layoutw)
-        self.status_bar = self.statusBar()
+        layout.addWidget(self.decoded_canvas)
+        layout.addWidget(self.decoded_nav_toolbar)
+
 
     def create_menu(self):
         menubar = self.menuBar()
@@ -279,28 +304,34 @@ class DeltaCodecApp(QMainWindow):
             self.pushButton_1.setEnabled(True)
             self.pushButton_2.setEnabled(True)
             self.process_button.setEnabled(True)
+            self.level_kvantovan2.setEnabled(True)
             self.generite.setEnabled(False)
+            self.level_kvantovan1.setEnabled(False)
         else:
             self.pushButton_1.setEnabled(False)
             self.pushButton_2.setEnabled(False)
             self.process_button.setEnabled(False)
             self.generite.setEnabled(True)
+            self.level_kvantovan1.setEnabled(True)
+            self.level_kvantovan2.setEnabled(False)
 
     def generate_signal(self):
-        signal_type = self.combobox.currentText()
-        if signal_type == 'Гармонический':
-            signal = self.generate_harmonic_signal()
-            self.process_random_signal(signal)
-        elif signal_type == 'Пилообразный':
-            signal = self.generate_sawtooth_signal()
-            self.process_random_signal(signal)
-        elif signal_type == 'Треугольный':
-            signal = self.generate_triangle_signal()
-            self.process_random_signal(signal)
-        elif signal_type == 'Случайный':
-            signal = self.generate_random_signal()
-            self.process_random_signal(signal)
-        self.status_bar.showMessage("Генерация сигнала произведена")
+        if (self.level_kvantovan1.text() == '') and (self.level_kvantovan1.text().isdigit()) :
+            QMessageBox.critical(self, 'Ошибка', 'Введите уровень квантования')
+        else:
+            signal_type = self.combobox.currentText()
+            if signal_type == 'Гармонический':
+                signal = self.generate_harmonic_signal()
+                self.process_random_signal(signal)
+            elif signal_type == 'Пилообразный':
+                signal = self.generate_sawtooth_signal()
+                self.process_random_signal(signal)
+            elif signal_type == 'Треугольный':
+                signal = self.generate_triangle_signal()
+                self.process_random_signal(signal)
+            elif signal_type == 'Случайный':
+                signal = self.generate_random_signal()
+                self.process_random_signal(signal)
 
     def generate_harmonic_signal(self):
         time = np.linspace(0, 1, 44100) 
@@ -382,36 +413,64 @@ class DeltaCodecApp(QMainWindow):
         figure.tight_layout()
         canvas.draw()
 
+    def plot_discrete_signal(self, figure, canvas, signal, color, title):
+        time = np.linspace(-1, 1, len(signal))
+        figure.clear()
+        ax = figure.add_subplot()
+        ax.plot(time, signal, marker='o', color=color, linestyle='-')
+        ax.set_title(title, color='w')
+        ax.set_xlabel('Время (сек)', color='w')
+        ax.set_ylabel('Амплитуда', color='w')
+        figure.tight_layout()
+        canvas.draw()
+
+    def plot_quantized_signal(self, figure, canvas, signal, quantization_levels, color, title):
+        time = np.linspace(-1, 1, len(signal))
+        figure.clear()
+        ax = figure.add_subplot()
+        ax.plot(time, signal, drawstyle='steps-pre', color=color, linestyle='-')
+        ax.set_title(title, color='w')
+        ax.set_xlabel('Время (сек)', color='w')
+        ax.set_ylabel('Уровень квантования', color='w')
+        ax.set_yticks(quantization_levels)
+        ax.grid(True)
+        figure.tight_layout()
+        canvas.draw() 
+
     def update_error_level(self):
         self.error_level = self.error_slider.value()
         self.error_label.setText(f'Количество ошибок: {self.error_level}%')
 
     def add_errors(self, signal):
         num_samples = len(signal)
-        num_errors = int(num_samples * self.error_level / 800)
+        num_errors = int(num_samples * self.error_level / 900)
         error_indices = np.random.choice(num_samples, num_errors, replace=False)
         signal_with_errors = np.copy(signal)
         signal_with_errors[error_indices] = np.random.uniform(-1, 1, num_errors)
         return signal_with_errors
 
     def process_signal(self):
-        file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
-        if file_path:
-            audio, sample_rate = lr.load(file_path, sr=None)
-            self.original_signal = audio
-            self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'b', 'Оригинальный сигнал')
-            self.update_error_level()
-            self.original_signal = self.add_errors(self.original_signal) 
-            self.encoded_signal = self.delta_encode(self.original_signal)
-            decoded_signal = self.delta_decode(self.encoded_signal)
-            self.decodeded_signal = decoded_signal
-            error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
-            mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
-            self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'orange', 'Закодированный сигнал')
-            self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
-            self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
-            self.status_bar.showMessage("Сигнал обработан")
+        if (self.level_kvantovan2.text() == '') and ((self.level_kvantovan2.text().isdigit())):
+            QMessageBox.critical(self, 'Ошибка', 'Введите уровень квантования')
+        else:
+            file_dialog = QFileDialog()
+            file_path, _ = file_dialog.getOpenFileName(self, 'Выберите аудиофайл', '', 'Audio files (*.mp3 *.wav)')
+            if file_path:
+                audio, sample_rate = lr.load(file_path, sr=None)
+                self.original_signal = audio
+                self.plot_signal(self.original_figure, self.original_canvas, self.original_signal, 'b', 'Оригинальный сигнал')
+                self.update_error_level()
+                self.original_signal = self.add_errors(self.original_signal) 
+                self.encoded_signal = self.delta_encode(self.original_signal)
+                decoded_signal = self.delta_decode(self.encoded_signal)
+                self.decodeded_signal = decoded_signal
+                self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'orange', 'Закодированный сигнал')
+                self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
+                self.plot_discrete_signal(self.discretnie_figure, self.discretnie_canvas, self.encoded_signal, 'green', 'Дискретный сигнал')
+                self.plot_quantized_signal(self.kvant_figure, self.kvant_canvas, self.encoded_signal, self.auto_quantization_levels(self.encoded_signal, int(self.level_kvantovan2.text())), 'yellow', 'Квантованный сигнал')
+                error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, self.decodeded_signal)
+                mse_error = self.calculate_mse_error(self.original_signal, self.decodeded_signal    )
+                self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.20f} \nСредне квадратичная ошибка: {mse_error:.30f}')
 
     def process_random_signal(self, signal):
         self.original_signal = signal
@@ -421,11 +480,20 @@ class DeltaCodecApp(QMainWindow):
         self.encoded_signal = self.delta_encode(self.original_signal)
         decoded_signal = self.delta_decode(self.encoded_signal)
         self.decodeded_signal = decoded_signal
-        error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
-        mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
         self.plot_signal_code(self.encoded_figure, self.encoded_canvas, self.encoded_signal, 'orange', 'Закодированный сигнал')
         self.plot_signal(self.decoded_figure, self.decoded_canvas, decoded_signal, 'r', 'Декодированный сигнал')
-        self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.4f} \nСредне квадратичная ошибка: {mse_error:.4f}')
+        self.plot_discrete_signal(self.discretnie_figure, self.discretnie_canvas, self.encoded_signal, 'green', 'Дискретный сигнал')
+        self.plot_quantized_signal(self.kvant_figure, self.kvant_canvas, self.encoded_signal, self.auto_quantization_levels(self.encoded_signal, int(self.level_kvantovan1.text())), 'yellow', 'Квантованный сигнал')
+        error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
+        mse_error = self.calculate_mse_error(self.original_signal, decoded_signal)
+        print(mse_error)
+        self.result_label.setText(f'Количество ошибок за секунду: {error_bits_per_second:.20f} \nСредне квадратичная ошибка: {mse_error:.30f}')
+
+    def auto_quantization_levels(self, signal, num_levels):
+        hist, bins = np.histogram(signal, bins=num_levels)
+        bin_centers = (bins[:-1] + bins[1:]) / 2
+        quantization_levels = bin_centers
+        return quantization_levels
 
     def calculate_error_bits_per_second(self, original_signal, decoded_signal):
         error_bits = np.sum(original_signal != decoded_signal)
