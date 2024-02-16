@@ -486,8 +486,8 @@ class DeltaCodecApp(QMainWindow):
                 self.show_signal_ches.setPlainText(np.array2string(audio, threshold=sys.maxsize))
                 self.original_signal = audio
                 self.update_error_level()
-                self.original_signal = self.add_errors(self.original_signal) 
-                self.encoded_signal = self.delta_encode(self.original_signal)
+                self.original_signal1 = self.add_errors(self.original_signal)
+                self.encoded_signal = self.delta_encode(self.original_signal1)
                 decoded_signal = self.delta_decode(self.encoded_signal)
                 self.decodeded_signal = decoded_signal
                 error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, self.decodeded_signal)
@@ -507,8 +507,8 @@ class DeltaCodecApp(QMainWindow):
         self.show_signal_ches.clear()
         self.show_signal_ches.setPlainText(np.array2string(signal, threshold=sys.maxsize))
         self.update_error_level()
-        self.original_signal = self.add_errors(self.original_signal) 
-        self.encoded_signal = self.delta_encode(self.original_signal)
+        self.original_signal1 = self.add_errors(self.original_signal) 
+        self.encoded_signal = self.delta_encode(self.original_signal1)
         decoded_signal = self.delta_decode(self.encoded_signal)
         self.decodeded_signal = decoded_signal
         error_bits_per_second = self.calculate_error_bits_per_second(self.original_signal, decoded_signal)
@@ -611,7 +611,6 @@ class DeltaCodecApp(QMainWindow):
         decoded_audio = AudioSegment.from_wav('./temp_audio.wav')
         play(decoded_audio)
         os.remove('./temp_audio.wav')
-        self.status_bar.showMessage("Проигрывание аудиосигнала завершено")
            
     def play_sound_thread(self):
         try:
